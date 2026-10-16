@@ -1,0 +1,861 @@
+<title>考勤日报台</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: a timecard app (タイムカード) — one column on phone, punch card + daily report side by side on desktop; boss view is a roster table over a day, a month ledger, approvals and settings. */
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --sunk:#e3e8ee; --line:#d3dae2;
+  --fg:#16212c; --muted:#5c6b7a;
+  --accent:#1f5f8b; --accent-fg:#ffffff;
+  --ok:#2c7a4b; --ok-bg:#e1f1e7; --warn:#a2620a; --warn-bg:#fbefd9; --bad:#b4372f; --bad-bg:#f8e2df;
+  --stamp:#c2412d; --holiday:#c2412d;
+  --f-body:"Noto Sans SC","Noto Sans JP","PingFang SC","Hiragino Sans","Microsoft YaHei",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10161c; --surface:#18212a; --sunk:#202b36; --line:#2c3a47;
+  --fg:#e4eaf0; --muted:#93a3b3;
+  --accent:#5aa4d6; --accent-fg:#0b1218;
+  --ok:#6cc58f; --ok-bg:#16301f; --warn:#e3ac52; --warn-bg:#33270f; --bad:#ec8077; --bad-bg:#3a1c19;
+  --stamp:#e9765f; --holiday:#ec8077; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10161c; --surface:#18212a; --sunk:#202b36; --line:#2c3a47;
+  --fg:#e4eaf0; --muted:#93a3b3;
+  --accent:#5aa4d6; --accent-fg:#0b1218;
+  --ok:#6cc58f; --ok-bg:#16301f; --warn:#e3ac52; --warn-bg:#33270f; --bad:#ec8077; --bad-bg:#3a1c19;
+  --stamp:#e9765f; --holiday:#ec8077; color-scheme:dark}
+html[lang="ja"]{--f-body:"Noto Sans JP","Hiragino Sans","Yu Gothic","Noto Sans SC",system-ui,sans-serif}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.55}
+.wrap{max-width:1100px;margin:0 auto;padding-block:16px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand h1{font-size:20px;margin:0;letter-spacing:.02em;text-wrap:balance}
+.brand small{color:var(--muted);font-size:12px;letter-spacing:.06em}
+.hdr-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tabs{display:flex;gap:4px;background:var(--sunk);padding:4px;border-radius:10px;flex-wrap:wrap}
+.tabs button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:14px;padding:6px 12px;border-radius:7px;cursor:pointer;white-space:nowrap}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--fg);font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.tabs .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:9px;background:var(--bad);color:var(--accent-fg);font-size:11px;line-height:18px;text-align:center}
+.lang{border:1px solid var(--line);background:var(--surface);color:var(--fg);font:inherit;font-size:13px;padding:6px 10px;border-radius:8px;cursor:pointer}
+.notice{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:10px 14px;font-size:13px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.panel h2{font-size:15px;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.panel h2 .sub{font-weight:400;color:var(--muted);font-size:13px}
+.grid2{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:16px}
+@media (max-width:760px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+.lbl{display:block;font-size:12px;color:var(--muted);letter-spacing:.04em;margin-bottom:4px}
+input,textarea,select{width:100%;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+textarea{min-height:76px;resize:vertical}
+input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--fg);font:inherit;font-size:14px;padding:8px 14px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:500}
+.btn.danger{color:var(--bad)}
+.btn.sm{font-size:13px;padding:4px 10px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+
+/* punch card */
+.clock{font-family:var(--f-mono);font-size:44px;font-weight:700;letter-spacing:.02em;line-height:1.1}
+.clock-date{color:var(--muted);font-size:14px}
+.clock-date .hol{color:var(--holiday);font-weight:500}
+.punches{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.punch{position:relative;border:1px dashed var(--line);border-radius:10px;padding:10px;min-height:86px;display:flex;flex-direction:column;justify-content:space-between;gap:4px;overflow:hidden}
+.punch .k{font-size:12px;color:var(--muted);letter-spacing:.06em}
+.punch .v{font-family:var(--f-mono);font-size:21px;font-weight:700}
+.punch .stamp{position:absolute;right:6px;top:6px;border:2px solid var(--stamp);color:var(--stamp);border-radius:50%;width:38px;height:38px;display:grid;place-items:center;font-size:11px;font-weight:700;transform:rotate(-12deg);opacity:.85}
+.bigbtn{width:100%;font-size:18px;padding:15px;border-radius:12px}
+.btnrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pill{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;white-space:nowrap;font-weight:500}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.pill.neutral{background:var(--sunk);color:var(--muted)}
+.flags{display:flex;gap:4px;flex-wrap:wrap}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;margin:0 -4px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{text-align:left;font-weight:500;color:var(--muted);font-size:12px;letter-spacing:.04em;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+tr.clickable{cursor:pointer}
+tr.clickable:hover td{background:var(--sunk)}
+td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+td.num.hot{color:var(--bad);font-weight:700}
+td.num.warm{color:var(--warn);font-weight:700}
+.date-hol{color:var(--holiday)}
+
+.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+@media (max-width:760px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px}
+.kpi .n{font-family:var(--f-mono);font-size:24px;font-weight:700;line-height:1.2}
+.kpi .t{font-size:12px;color:var(--muted)}
+.kpi.alert .n{color:var(--bad)}
+
+.report{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.report:first-child{border-top:0;padding-top:0}
+.report .who{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}
+.report dl{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px}
+.report dt{color:var(--muted);font-size:12px;padding-top:2px;white-space:nowrap}
+.report dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.comment{background:var(--sunk);border-radius:8px;padding:8px 10px;font-size:13px}
+.req{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.req .reason{white-space:pre-wrap;overflow-wrap:anywhere}
+.empty{color:var(--muted);text-align:center;padding:24px 12px;font-size:14px}
+.meter{height:8px;border-radius:4px;background:var(--sunk);overflow:hidden;min-width:80px}
+.meter i{display:block;height:100%;background:var(--ok)}
+.meter i.warm{background:var(--warn)} .meter i.hot{background:var(--bad)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:999px;font-size:14px;z-index:20;max-width:calc(100% - 32px)}
+.login{display:grid;place-items:center;padding-block:4vh}
+.login-card{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:28px 24px;display:flex;flex-direction:column;gap:16px}
+.login-brand{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.login-brand img{max-height:72px;max-width:220px;object-fit:contain}
+.logo-ph{width:64px;height:64px;border-radius:14px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;font-size:28px;font-weight:700}
+.login-brand .co{font-size:20px;font-weight:700;text-wrap:balance}
+.login-brand .sys{font-size:13px;color:var(--muted);letter-spacing:.08em}
+.login .clock{text-align:center;font-size:36px}
+.login .clock-date{text-align:center}
+.who-card{display:flex;align-items:center;gap:12px;background:var(--sunk);border-radius:10px;padding:12px}
+.who-card img{width:40px;height:40px;border-radius:50%}
+.hdr-logo{height:28px;max-width:120px;object-fit:contain}
+.logo-prev{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.logo-prev img{max-height:48px;max-width:160px;object-fit:contain;background:var(--bg);border-radius:6px;padding:4px}
+.task{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.task.urgent{border-color:var(--bad)}
+.task .tt{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}
+.task .tt b{font-size:15px;overflow-wrap:anywhere}
+.task .det{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);color:var(--muted);font:inherit;font-size:13px;padding:5px 10px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+.task-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:12px}
+.modal-bg{position:fixed;inset:0;background:rgba(10,16,22,.45);display:grid;place-items:center;z-index:15;padding:16px}
+.modal{background:var(--surface);border-radius:14px;padding:18px;width:100%;max-width:440px;max-height:90vh;overflow:auto}
+@media (prefers-reduced-motion:no-preference){.punch .stamp{animation:stamp .25s ease-out}}
+@keyframes stamp{from{transform:rotate(-12deg) scale(1.6);opacity:0}to{transform:rotate(-12deg) scale(1);opacity:.85}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><img id="hdr-logo" class="hdr-logo" alt="" hidden><h1 id="appname">考勤日报台</h1><small id="hdr-co"></small></div>
+    <div class="hdr-right">
+      <div class="tabs" id="tabs" hidden role="tablist">
+        <button id="tab-boss" role="tab" aria-selected="true"></button>
+        <button id="tab-me" role="tab" aria-selected="false"></button>
+      </div>
+      <button class="lang" id="lang" aria-label="language"></button>
+      <button class="lang" id="logout" hidden></button>
+    </div>
+  </header>
+  <div id="notice" class="notice" hidden></div>
+  <main id="app"><div class="panel empty">…</div></main>
+</div>
+<div id="modal" hidden></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+(() => {
+const TZ = "Asia/Tokyo";
+const $ = s => document.querySelector(s);
+const app = $("#app");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ---------- i18n ---------- */
+const L = {
+zh:{ app:"考勤日报台", boss:"老板工作台", me:"我的打卡", langBtn:"日本語",
+  connecting:"正在连接……", signin:"请先登录 claude.ai 再打开本页面。",
+  regTitle:"首次使用，请登记", regHint:"登记后老板的工作台会看到你的打卡和汇报。", name:"姓名", dept:"部门 / 岗位", namePh:"例如 王小明", deptPh:"例如 东京仓库", register:"登记", registered:"已登记", needName:"请填写姓名",
+  in:"上班", out:"下班", brk:"休息", sIn:"出勤", sOut:"退勤", sBrk:"休憩",
+  punchIn:"上班打卡", punchOut:"下班打卡", brkStart:"开始休息", brkEnd:"结束休息", onBreak:"休息中",
+  okIn:"上班打卡成功", okOut:"下班打卡成功，辛苦了", okBrkS:"已开始休息", okBrkE:"休息结束",
+  done:"今日已完成", span:"在岗", net:"实际工时", ot:"加班", night:"深夜", hol:"休日劳动",
+  reportReminder:"下班前记得提交今日日报。", schedule:"规定时间",
+  repTitle:"今日日报", submittedAt:"已提交", reviewed:"老板已阅", notSubmitted:"未提交",
+  rDone:"今天完成了什么", rPlan:"明天计划", rIssue:"遇到的问题", rConsult:"需要商量的事（相談）",
+  rDonePh:"例如：完成 3 单出货，盘点 A 区库存", rPlanPh:"例如：处理退货，联系供应商", rOptPh:"没有可以不填",
+  submit:"提交日报", saveEdit:"保存修改", cancel:"取消", editRep:"修改日报", bossReply:"老板回复",
+  lDone:"完成", lPlan:"明天", lIssue:"问题", lConsult:"相談",
+  needDone:"请填写今天完成的工作", repOk:"日报已提交，老板端已收到",
+  recent:"最近记录", recentSub:"近 31 天", recentEmpty:"打卡后，这里会列出你过去的记录。",
+  date:"日期", report:"日报", handed:"已交", missing:"未交", fix:"改卡", fixReq:"申请改卡",
+  late:"迟到", early:"早退", noBrk:"休息不足", corrected:"已修正", pending:"审批中", approved:"已批准", rejected:"已驳回",
+  reqTitle:"改卡申请", reqHint:"填写正确的时间和理由，老板批准后自动修改记录。", inTime:"上班时间", outTime:"下班时间", brkMin:"休息（分钟）", reason:"理由", reasonPh:"例如：忘记打下班卡，实际 18:30 离开", send:"提交申请", reqSent:"申请已提交，等老板审批", needReason:"请填写理由", needTimes:"请至少填写上班或下班时间",
+  myReqs:"我的改卡申请",
+  monthMine:"本期", days:"出勤天数",
+  tDay:"每日考勤", tFeed:"日报动态", tMonth:"月度统计", tReq:"审批", tSet:"设置",
+  noStaff:"还没有员工登记。<br>把本页面分享给员工（设为可编辑），员工打开后登记姓名，就会出现在这里。",
+  staff:"员工", inN:"已上班", outN:"已下班", noneN:"未打卡", repN:"已交日报", lateN:"迟到",
+  today:"今天", clickRow:"点一行查看日报", status:"状态", noPunch:"未打卡", working:"在岗中", left:"已下班", offDay:"休息日",
+  newRep:"新日报", read:"已阅", replyPh:"回复员工（可不填）", markRead:"标记已阅", updReply:"更新回复", markedRead:"已标记已阅", noRepThatDay:"这天没有提交日报。", submittedSuffix:"提交",
+  feedTitle:"最新日报", feedSub:"按提交时间", feedEmpty:"员工提交日报后会出现在这里。",
+  period:"结算期", exportCsv:"导出 CSV", workDays:"出勤", lateCnt:"迟到", earlyCnt:"早退", netH:"实际工时", otH:"普通加班", nightH:"深夜", holH:"休日劳动", ytd:"年度累计加班", openOut:"漏打下班",
+  m36:"36协定：月加班上限 45 小时、年 360 小时。超过 80% 显示黄色，超过上限显示红色。月加班加休日劳动达到 80 小时为过劳警戒线，100 小时为法定上限。",
+  calcNote:"计算规则：休息按实际打卡记录；没有记录时按法定最低（超过 6 小时 45 分钟、超过 8 小时 60 分钟）扣除并标为“休息不足”。普通加班＝工作日超过 8 小时的部分，加上所定休息日（周六、祝日）的全部工时。休日劳动＝法定休日的工时。深夜＝22:00〜5:00 的工时。未计算每周 40 小时规则，发工资前请人工核对。",
+  reqEmpty:"没有待审批的申请。", approve:"批准", reject:"驳回", reqNotePh:"备注（可不填）", reqDone:"已处理", reqOkA:"已批准，记录已更新", reqOkR:"已驳回", history:"已处理",
+  original:"原记录", requested:"申请改为",
+  setTitle:"考勤规则", setStart:"规定上班时间", setEnd:"规定下班时间", setClose:"工资结算日（締め日）", closeEnd:"月末", closeN:"每月 {n} 日", setLegal:"法定休日", setFy:"36协定起算月", setOtM:"月加班上限（小时）", setOtY:"年加班上限（小时）", saveSet:"保存设置", setSaved:"设置已保存", sun:"周日", sat:"周六", monthN:"{n} 月",
+  holidaysNote:"已内置 2026–2027 年日本法定节假日（祝日）。",
+  noWrite:"没有写入权限：请让老板把你设为可编辑成员。", saveFail:"保存失败，请重试。", connErr:"数据连接出现问题，稍后会自动重试。", revoked:"访问权限已变更，请刷新页面。",
+  demo:"示例数据：当前预览没有连接到共享数据，下面的员工和记录都是演示用的。在 claude.ai 打开本页即为正式版本。",
+  wd:"日一二三四五六", notExported:"未导出",
+  csvHead:["员工","部门","日期","区分","上班","下班","休息(分)","实际工时","普通加班","深夜","休日劳动","迟到","早退","今日完成","明日计划","问题","相談","老板回复"],
+  kindWork:"工作日", kindOff:"所定休日", kindLegal:"法定休日",
+  sysName:"考勤日报系统", coPh:"（请在设置里填写公司名称）", empNo:"员工编号", empNoPh:"例如 A0012", signedAs:"当前账号", enter:"上班入口", enterBoss:"进入管理工作台", enterAsStaff:"以员工身份进入", logout:"退出", loginHint:"使用你的 Claude 账号登录，无需另设密码。", firstTime:"第一次使用，请先登记",
+  setCo:"公司标识", coName:"公司名称", coNameJa:"公司名称（日文，可不填）", logo:"公司标志", upLogo:"上传标志图片", rmLogo:"移除标志", logoOk:"标志已上传，记得保存设置", logoFail:"上传失败：请用 PNG、JPG 或 SVG 图片", logoNoPerm:"当前视图不能上传图片",
+  tTask:"任务", myTasks:"老板布置的任务", noTasks:"现在没有任务。", newTask:"布置新任务", assignee:"交给", allStaff:"全体员工", taskTitle:"任务内容", taskTitlePh:"例如：月底前完成 A 区库存盘点", taskDetail:"说明（可不填）", due:"截止日期", prio:"优先级", pNormal:"普通", pHigh:"重要", pUrgent:"紧急", assign:"布置任务", assigned:"任务已布置", needTitle:"请填写任务内容",
+  stTodo:"未开始", stDoing:"进行中", stDone:"已完成", progress:"进度说明", progressPh:"例如：已完成一半，周五前可完成", saveProg:"保存进度", progSaved:"进度已更新", overdue:"已逾期", dueOn:"截止", doneOn:"完成于", withdraw:"撤回", withdrawn:"任务已撤回", activeTasks:"进行中的任务", doneTasks:"最近完成", openN:"未完成", overdueN:"逾期" },
+ja:{ app:"勤怠日報ボード", boss:"管理者ボード", me:"マイ打刻", langBtn:"中文",
+  connecting:"接続中…", signin:"claude.ai にログインしてから開いてください。",
+  regTitle:"はじめに登録してください", regHint:"登録すると、打刻と日報が管理者ボードに表示されます。", name:"氏名", dept:"部署・職種", namePh:"例：佐藤 健", deptPh:"例：東京倉庫", register:"登録", registered:"登録しました", needName:"氏名を入力してください",
+  in:"出勤", out:"退勤", brk:"休憩", sIn:"出勤", sOut:"退勤", sBrk:"休憩",
+  punchIn:"出勤する", punchOut:"退勤する", brkStart:"休憩開始", brkEnd:"休憩終了", onBreak:"休憩中",
+  okIn:"出勤を打刻しました", okOut:"退勤を打刻しました。お疲れさまでした", okBrkS:"休憩に入りました", okBrkE:"休憩を終了しました",
+  done:"本日の勤務終了", span:"拘束", net:"実働", ot:"残業", night:"深夜", hol:"休日労働",
+  reportReminder:"退勤前に日報を提出してください。", schedule:"所定時間",
+  repTitle:"本日の日報", submittedAt:"提出済", reviewed:"確認済", notSubmitted:"未提出",
+  rDone:"本日の業務内容", rPlan:"明日の予定", rIssue:"課題・問題点", rConsult:"相談事項",
+  rDonePh:"例：出荷3件完了、A区画の棚卸し", rPlanPh:"例：返品対応、仕入先へ連絡", rOptPh:"なければ空欄で構いません",
+  submit:"日報を提出", saveEdit:"修正を保存", cancel:"キャンセル", editRep:"日報を修正", bossReply:"管理者コメント",
+  lDone:"業務", lPlan:"明日", lIssue:"課題", lConsult:"相談",
+  needDone:"本日の業務内容を入力してください", repOk:"日報を提出しました",
+  recent:"最近の記録", recentSub:"直近31日", recentEmpty:"打刻すると、ここに記録が表示されます。",
+  date:"日付", report:"日報", handed:"提出", missing:"未提出", fix:"修正", fixReq:"打刻修正申請",
+  late:"遅刻", early:"早退", noBrk:"休憩不足", corrected:"修正済", pending:"申請中", approved:"承認", rejected:"却下",
+  reqTitle:"打刻修正申請", reqHint:"正しい時刻と理由を入力してください。承認されると記録が修正されます。", inTime:"出勤時刻", outTime:"退勤時刻", brkMin:"休憩（分）", reason:"理由", reasonPh:"例：退勤打刻を忘れました。実際は18:30に退勤", send:"申請する", reqSent:"申請しました。承認をお待ちください", needReason:"理由を入力してください", needTimes:"出勤か退勤の時刻を入力してください",
+  myReqs:"自分の修正申請",
+  monthMine:"今期", days:"出勤日数",
+  tDay:"日次勤怠", tFeed:"日報一覧", tMonth:"月次集計", tReq:"承認", tSet:"設定",
+  noStaff:"まだ登録された従業員がいません。<br>このページを従業員に共有（編集者として招待）すると、登録後ここに表示されます。",
+  staff:"従業員", inN:"出勤済", outN:"退勤済", noneN:"未打刻", repN:"日報提出", lateN:"遅刻",
+  today:"本日", clickRow:"行をタップすると日報を表示", status:"状態", noPunch:"未打刻", working:"勤務中", left:"退勤済", offDay:"休日",
+  newRep:"新着", read:"確認済", replyPh:"コメント（任意）", markRead:"確認済にする", updReply:"コメント更新", markedRead:"確認済にしました", noRepThatDay:"この日の日報はありません。", submittedSuffix:"提出",
+  feedTitle:"最新の日報", feedSub:"提出順", feedEmpty:"日報が提出されるとここに表示されます。",
+  period:"締め期間", exportCsv:"CSV出力", workDays:"出勤", lateCnt:"遅刻", earlyCnt:"早退", netH:"実働", otH:"時間外", nightH:"深夜", holH:"休日労働", ytd:"年間時間外累計", openOut:"退勤漏れ",
+  m36:"36協定：時間外は月45時間・年360時間が上限。80%超は黄色、上限超は赤で表示。時間外＋休日労働が月80時間で過労死ライン、100時間で法定上限。",
+  calcNote:"計算方法：休憩は打刻した実績を使用。打刻がない場合は法定最低（6時間超45分、8時間超60分）を控除し「休憩不足」と表示。時間外＝平日8時間超の部分＋所定休日（土曜・祝日）の全労働時間。休日労働＝法定休日の労働時間。深夜＝22:00〜5:00。週40時間規定は未反映のため、給与計算前に確認してください。",
+  reqEmpty:"承認待ちの申請はありません。", approve:"承認", reject:"却下", reqNotePh:"コメント（任意）", reqDone:"処理済", reqOkA:"承認し、記録を修正しました", reqOkR:"却下しました", history:"処理済",
+  original:"元の記録", requested:"申請内容",
+  setTitle:"勤怠ルール", setStart:"所定始業時刻", setEnd:"所定終業時刻", setClose:"締め日", closeEnd:"月末", closeN:"毎月{n}日", setLegal:"法定休日", setFy:"36協定の起算月", setOtM:"月の時間外上限（時間）", setOtY:"年の時間外上限（時間）", saveSet:"設定を保存", setSaved:"設定を保存しました", sun:"日曜", sat:"土曜", monthN:"{n}月",
+  holidaysNote:"2026〜2027年の国民の祝日を登録済みです。",
+  noWrite:"書き込み権限がありません。管理者に編集者として招待してもらってください。", saveFail:"保存できませんでした。もう一度お試しください。", connErr:"接続に問題があります。自動で再試行します。", revoked:"アクセス権が変更されました。再読み込みしてください。",
+  demo:"サンプル表示：共有データに接続されていないため、以下の従業員と記録はデモ用です。claude.ai で開くと本番になります。",
+  wd:"日月火水木金土", notExported:"出力しませんでした",
+  csvHead:["従業員","部署","日付","区分","出勤","退勤","休憩(分)","実働","時間外","深夜","休日労働","遅刻","早退","業務内容","明日の予定","課題","相談事項","管理者コメント"],
+  kindWork:"平日", kindOff:"所定休日", kindLegal:"法定休日",
+  sysName:"勤怠・日報システム", coPh:"（設定で会社名を入力してください）", empNo:"社員番号", empNoPh:"例：A0012", signedAs:"ログイン中のアカウント", enter:"出勤画面へ", enterBoss:"管理者ボードへ", enterAsStaff:"従業員として入る", logout:"ログアウト", loginHint:"Claude アカウントでログインします。別のパスワードは不要です。", firstTime:"初めての方は登録してください",
+  setCo:"会社情報", coName:"会社名", coNameJa:"会社名（日本語・任意）", logo:"ロゴ", upLogo:"ロゴ画像をアップロード", rmLogo:"ロゴを削除", logoOk:"アップロードしました。設定を保存してください", logoFail:"アップロードできません。PNG・JPG・SVG を使ってください", logoNoPerm:"この画面ではアップロードできません",
+  tTask:"タスク", myTasks:"上司からのタスク", noTasks:"現在タスクはありません。", newTask:"タスクを指示", assignee:"担当者", allStaff:"全員", taskTitle:"タスク内容", taskTitlePh:"例：月末までにA区画の棚卸しを完了", taskDetail:"詳細（任意）", due:"期限", prio:"優先度", pNormal:"通常", pHigh:"重要", pUrgent:"至急", assign:"指示する", assigned:"タスクを指示しました", needTitle:"タスク内容を入力してください",
+  stTodo:"未着手", stDoing:"対応中", stDone:"完了", progress:"進捗メモ", progressPh:"例：半分完了、金曜までに完了予定", saveProg:"進捗を保存", progSaved:"進捗を更新しました", overdue:"期限超過", dueOn:"期限", doneOn:"完了日", withdraw:"取り下げ", withdrawn:"タスクを取り下げました", activeTasks:"対応中のタスク", doneTasks:"最近完了", openN:"未完了", overdueN:"期限超過" }
+};
+let lang = "zh";
+try { lang = localStorage.getItem("tc-lang") || (navigator.language || "").startsWith("ja") && "ja" || "zh"; } catch { lang = (navigator.language || "").startsWith("ja") ? "ja" : "zh"; }
+const t = (k, n) => { const v = (L[lang][k] ?? L.zh[k] ?? k); return n != null ? String(v).replace("{n}", n) : v; };
+
+/* ---------- Japan calendar ---------- */
+const HOLIDAYS = {
+  "2026-01-01":"元日","2026-01-12":"成人の日","2026-02-11":"建国記念の日","2026-02-23":"天皇誕生日","2026-03-20":"春分の日","2026-04-29":"昭和の日","2026-05-03":"憲法記念日","2026-05-04":"みどりの日","2026-05-05":"こどもの日","2026-05-06":"振替休日","2026-07-20":"海の日","2026-08-11":"山の日","2026-09-21":"敬老の日","2026-09-22":"国民の休日","2026-09-23":"秋分の日","2026-10-12":"スポーツの日","2026-11-03":"文化の日","2026-11-23":"勤労感謝の日",
+  "2027-01-01":"元日","2027-01-11":"成人の日","2027-02-11":"建国記念の日","2027-02-23":"天皇誕生日","2027-03-21":"春分の日","2027-03-22":"振替休日","2027-04-29":"昭和の日","2027-05-03":"憲法記念日","2027-05-04":"みどりの日","2027-05-05":"こどもの日","2027-07-19":"海の日","2027-08-11":"山の日","2027-09-20":"敬老の日","2027-09-23":"秋分の日","2027-10-11":"スポーツの日","2027-11-03":"文化の日","2027-11-23":"勤労感謝の日"
+};
+const DEF = { start:"09:00", end:"18:00", closing:0, legalDow:0, fyStart:4, otMonth:45, otYear:360 };
+const H = 36e5;
+const dayKey = (ms = Date.now()) => new Intl.DateTimeFormat("en-CA",{timeZone:TZ,year:"numeric",month:"2-digit",day:"2-digit"}).format(ms);
+const at = (k, hhmm) => Date.parse(`${k}T${hhmm}:00+09:00`);
+const dow = k => { const [y,m,d] = k.split("-").map(Number); return new Date(Date.UTC(y,m-1,d)).getUTCDay(); };
+const addDays = (k, n) => { const [y,m,d] = k.split("-").map(Number); return new Date(Date.UTC(y,m-1,d+n)).toISOString().slice(0,10); };
+const hm = ms => ms ? new Intl.DateTimeFormat("ja-JP",{timeZone:TZ,hour:"2-digit",minute:"2-digit",hour12:false}).format(ms) : "—";
+const hms = ms => new Intl.DateTimeFormat("ja-JP",{timeZone:TZ,hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(ms);
+const wdName = k => t("wd")[dow(k)];
+const longDate = k => { const [y,m,d] = k.split("-").map(Number); return lang === "ja" ? `${y}年${m}月${d}日（${wdName(k)}）` : `${y}年${m}月${d}日 周${wdName(k)}`; };
+const shortDate = k => { const [,m,d] = k.split("-").map(Number); return lang === "ja" ? `${m}/${d}（${wdName(k)}）` : `${m}/${d} 周${wdName(k)}`; };
+const fmtH = h => h == null ? "—" : (() => { const mins = Math.round(h * 60); return `${Math.floor(mins/60)}:${String(mins % 60).padStart(2,"0")}`; })();
+
+function kindOf(k){
+  const s = cfg(), w = dow(k);
+  if (w === s.legalDow) return "legal";
+  if (HOLIDAYS[k] || w === 0 || w === 6) return "off";
+  return "work";
+}
+function breakMs(d){
+  if (d.breakMin != null) return { ms:d.breakMin * 6e4, recorded:true };
+  if (d.breaks?.length) return { ms:d.breaks.reduce((a,b) => a + Math.max(0, (b.e || d.outAt || Date.now()) - b.s), 0), recorded:true };
+  return { ms:0, recorded:false };
+}
+function inBreak(d, ms){ return (d.breaks || []).some(b => ms >= b.s && ms < (b.e || Infinity)); }
+// Per-day calculation following Japanese labour rules (simplified; weekly 40h rule not applied).
+function calc(d, k){
+  if (!d?.inAt) return null;
+  const s = cfg(), kind = kindOf(k);
+  const late = kind === "work" && d.inAt > at(k, s.start) + 59e3;
+  if (!d.outAt) return { kind, late, open:true };
+  const spanMs = d.outAt - d.inAt, span = spanMs / H;
+  const legalMin = span > 8 ? 1 : span > 6 ? .75 : 0;
+  let { ms, recorded } = breakMs(d);
+  let brk = ms / H, shortBrk = false;
+  if (!recorded) { brk = legalMin; shortBrk = legalMin > 0; }
+  else if (brk + 1e-6 < legalMin) shortBrk = true;
+  const net = Math.max(0, span - brk);
+  // night work 22:00-05:00 JST, sampled per minute, excluding recorded breaks
+  let nightMin = 0;
+  if (spanMs < 36 * H) for (let x = d.inAt; x < d.outAt; x += 6e4) { const hr = ((x / H) + 9) % 24; if ((hr >= 22 || hr < 5) && !inBreak(d, x)) nightMin++; }
+  if (d.breakMin != null && nightMin) nightMin = Math.max(0, nightMin - Math.max(0, d.breakMin - (span * 60 - nightMin)));
+  const ot = kind === "legal" ? 0 : kind === "off" ? net : Math.max(0, net - 8);
+  const hol = kind === "legal" ? net : 0;
+  const early = kind === "work" && d.outAt < at(k, s.end);
+  return { kind, span, brk, net, ot, hol, night:nightMin / 60, late, early, shortBrk, open:false };
+}
+function periodOf(ym){
+  const c = cfg().closing;
+  const [y,m] = ym.split("-").map(Number);
+  if (!c) { const last = new Date(Date.UTC(y, m, 0)).getUTCDate(); return [`${ym}-01`, `${ym}-${String(last).padStart(2,"0")}`]; }
+  const end = `${ym}-${String(c).padStart(2,"0")}`;
+  const p = new Date(Date.UTC(y, m - 2, c + 1)).toISOString().slice(0,10);
+  return [p, end];
+}
+function periodForDay(k){ const c = cfg().closing; const [y,m,d] = k.split("-").map(Number); if (!c || d <= c) return k.slice(0,7); return new Date(Date.UTC(y, m, 1)).toISOString().slice(0,7); }
+function fyStartKey(ym){ const fs = cfg().fyStart; let [y,m] = ym.split("-").map(Number); if (m < fs) y--; return periodOf(`${y}-${String(fs).padStart(2,"0")}`)[0]; }
+
+/* ---------- state ---------- */
+let toastTimer;
+function toast(msg){ const el = $("#toast"); el.textContent = msg; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => el.hidden = true, 2800); }
+function notice(msg){ const n = $("#notice"); n.textContent = msg || ""; n.hidden = !msg; }
+const S = { db:null, user:null, uid:null, isOwner:false, view:"me", demo:false, settings:null,
+  me:null, myDays:{}, staff:{}, days:{}, subs:{}, bossDate:dayKey(), bossMonth:periodForDayInit(), bossTab:"day", openRow:null, editing:false, downloads:null, noticeKey:null, entered:false, assets:null, prof:null, logoDraft:undefined };
+function periodForDayInit(){ return dayKey().slice(0,7); }
+const cfg = () => ({ ...DEF, ...(S.settings || {}) });
+
+/* ---------- boot ---------- */
+async function boot(){
+  applyLang();
+  const c = window.claude;
+  const [db, user, downloads, assets] = c?.use ? await Promise.all([c.use("db"), c.use("user"), c.use("downloads"), c.use("assets")]) : [null,null,null,null];
+  S.db = db; S.user = user; S.downloads = downloads; S.assets = assets;
+  if (!db || !user) { startDemo(); return; }
+  S.uid = await user.id();
+  S.isOwner = await user.isOwner();
+  if (!S.uid) { app.innerHTML = `<div class="panel empty">${t("signin")}</div>`; return; }
+  S.view = S.isOwner ? "boss" : "me";
+  S.prof = await user.me();
+  if (S.isOwner) subscribeStaff();
+  S.db.doc("config/settings").onSnapshot(s => { S.settings = s.exists ? s.data() : null; S.bossMonth = periodForDay(S.bossDate); applyBrand(); render(); }, onErr);
+  subscribeMine();
+  render();
+}
+function subscribeMine(){
+  S.db.doc(`staff/${S.uid}`).onSnapshot(s => { S.me = s.exists ? s.data() : null; render(); }, onErr);
+  S.db.collection(`staff/${S.uid}/days`).orderBy("date","desc").limit(62).onSnapshot(q => {
+    S.myDays = {}; q.docs.forEach(d => S.myDays[d.id] = d.data()); render();
+  }, onErr);
+}
+function subscribeStaff(){
+  S.db.collection("staff").onSnapshot(q => {
+    const ids = new Set();
+    q.docs.forEach(d => { S.staff[d.id] = d.data(); ids.add(d.id); });
+    for (const id of Object.keys(S.staff)) if (!ids.has(id)) { delete S.staff[id]; S.subs[id]?.(); delete S.subs[id]; delete S.days[id]; }
+    for (const id of ids) if (!S.subs[id]) {
+      S.subs[id] = S.db.collection(`staff/${id}/days`).orderBy("date","desc").limit(400).onSnapshot(dq => {
+        S.days[id] = {}; dq.docs.forEach(d => S.days[id][d.id] = d.data()); render();
+      }, onErr);
+    }
+    render();
+  }, onErr);
+}
+function onErr(e){ notice(e?.code === "revoked" ? t("revoked") : t("connErr")); S.noticeKey = e?.code === "revoked" ? "revoked" : "connErr"; }
+const writeErr = e => toast(e?.code === "invalid_argument" ? t("noWrite") : t("saveFail"));
+
+/* ---------- writes ---------- */
+async function saveMyDay(patch){
+  const k = dayKey();
+  const next = { ...(S.myDays[k] || {}), ...patch, date:k, updatedAt:Date.now() };
+  if (S.demo) { S.myDays[k] = next; render(); return true; }
+  try { await S.db.doc(`staff/${S.uid}/days/${k}`).set(next); return true; } catch(e){ writeErr(e); return false; }
+}
+async function saveProfile(name, dept, empNo){
+  if (S.demo) { S.me = { ...(S.me||{}), name, dept, empNo }; render(true); return true; }
+  try {
+    const ref = S.db.doc(`staff/${S.uid}`);
+    if (S.me) await ref.update({ name, dept, empNo }); else await ref.set({ name, dept, empNo, joinedAt:Date.now() });
+    toast(t("registered")); return true;
+  } catch(e){ writeErr(e); return false; }
+}
+async function sendRequest(req){
+  const rid = "r" + Date.now().toString(36);
+  const body = { ...req, status:"pending", createdAt:Date.now() };
+  if (S.demo) { S.me.requests = { ...(S.me.requests||{}), [rid]:body }; S.staff["demo-me"] = S.me; render(); return true; }
+  try { await S.db.doc(`staff/${S.uid}`).update({ requests:{ [rid]:body } }); return true; } catch(e){ writeErr(e); return false; }
+}
+async function decideRequest(id, rid, ok, note){
+  const p = S.staff[id], r = p?.requests?.[rid]; if (!r) return;
+  const k = r.date, cur = (S.days[id] || {})[k] || { date:k };
+  let next = null;
+  if (ok) {
+    next = { ...cur, date:k, corrected:true, updatedAt:Date.now() };
+    if (r.inTime) next.inAt = at(k, r.inTime);
+    if (r.outTime) { let o = at(k, r.outTime); const base = next.inAt || at(k, "00:00"); if (o <= base) o += 24 * H; next.outAt = o; }
+    if (r.breakMin != null) { next.breakMin = r.breakMin; delete next.breaks; }
+    next.correctionLog = [ ...(cur.correctionLog || []), { at:Date.now(), rid, from:{ inAt:cur.inAt ?? null, outAt:cur.outAt ?? null }, reason:r.reason } ];
+  }
+  const decision = { status: ok ? "approved" : "rejected", decidedAt:Date.now(), bossNote:note || "" };
+  if (S.demo) { if (next) { S.days[id] = S.days[id] || {}; S.days[id][k] = next; } p.requests[rid] = { ...r, ...decision }; render(); toast(ok ? t("reqOkA") : t("reqOkR")); return; }
+  try {
+    if (next) await S.db.doc(`staff/${id}/days/${k}`).set(next);
+    await S.db.doc(`staff/${id}`).update({ requests:{ [rid]:decision } });
+    toast(ok ? t("reqOkA") : t("reqOkR"));
+  } catch(e){ writeErr(e); }
+}
+async function assignTask(ids, task){
+  const tid = "t" + Date.now().toString(36) + Math.random().toString(36).slice(2,5);
+  const body = { ...task, status:"todo", progress:"", createdAt:Date.now(), updatedAt:Date.now() };
+  if (S.demo) { ids.forEach(id => { S.staff[id].tasks = { ...(S.staff[id].tasks||{}), [tid]:{ ...body } }; }); render(true); toast(t("assigned")); return true; }
+  try { for (const id of ids) await S.db.doc(`staff/${id}`).update({ tasks:{ [tid]:body } }); toast(t("assigned")); return true; } catch(e){ writeErr(e); return false; }
+}
+async function patchTask(id, tid, patch, msg){
+  const body = { ...patch, updatedAt:Date.now() };
+  if (S.demo) { const p = id === S.uid ? S.me : S.staff[id]; p.tasks[tid] = { ...p.tasks[tid], ...body }; render(true); if (msg) toast(msg); return; }
+  try { await S.db.doc(`staff/${id}`).update({ tasks:{ [tid]:body } }); if (msg) toast(msg); } catch(e){ writeErr(e); }
+}
+async function saveComment(id, k, text){
+  const next = { ...((S.days[id] || {})[k] || { date:k }), bossComment:text, reviewedAt:Date.now() };
+  if (S.demo) { S.days[id][k] = next; render(); return; }
+  try { await S.db.doc(`staff/${id}/days/${k}`).set(next); toast(t("markedRead")); } catch(e){ writeErr(e); }
+}
+async function saveSettings(s){
+  if (S.demo) { S.settings = s; render(); toast(t("setSaved")); return; }
+  try { await S.db.doc("config/settings").set(s); toast(t("setSaved")); } catch(e){ writeErr(e); }
+}
+
+/* ---------- render ---------- */
+let pending = false;
+function applyLang(){
+  document.documentElement.lang = lang === "ja" ? "ja" : "zh";
+  $("#appname").textContent = t("app");
+  $("#tab-boss").textContent = t("boss"); $("#tab-me").textContent = t("me");
+  $("#lang").textContent = t("langBtn");
+  $("#logout").textContent = t("logout");
+  applyBrand();
+  if (S.noticeKey) notice(t(S.noticeKey));
+}
+function coName(){ const s = S.settings || {}; return (lang === "ja" && s.companyNameJa) || s.companyName || ""; }
+const logoUrl = id => id ? "/_blob/" + encodeURIComponent(id) : "";
+function applyBrand(){
+  const s = S.settings || {}, img = $("#hdr-logo");
+  if (s.logoId && !S.demo) { img.src = logoUrl(s.logoId); img.hidden = false; } else img.hidden = true;
+  $("#hdr-co").textContent = coName() || "JST";
+  document.title = coName() ? `${coName()} · ${t("app")}` : t("app");
+}
+function loginHTML(){
+  const s = S.settings || {}, k = dayKey(), co = coName();
+  const logo = s.logoId && !S.demo ? `<img src="${logoUrl(s.logoId)}" alt="${esc(co)}">` : `<div class="logo-ph">${esc((co || t("app")).replace(/^\s*[（(][^）)]*[）)]\s*/, "").replace(/^(株式会社|有限会社|合同会社)/, "").trim().charAt(0) || "◎")}</div>`;
+  const who = S.prof ? `<div class="who-card"><img src="${esc(S.prof.avatarUrl)}" alt=""><div><div class="small muted">${t("signedAs")}</div><b>${esc(S.me?.name || S.prof.name || "—")}</b>${S.me?.empNo ? ` <span class="mono small muted">${esc(S.me.empNo)}</span>` : ""}</div></div>` : "";
+  const reg = !S.me && !S.isOwner;
+  return `<div class="login"><div class="login-card">
+    <div class="login-brand">${logo}<div class="co">${co ? esc(co) : `<span class="muted" style="font-size:14px;font-weight:400">${t("coPh")}</span>`}</div><div class="sys">${t("sysName")}</div></div>
+    <div><div class="clock" id="clock">${hms(Date.now())}</div><div class="clock-date">${longDate(k)} ${holLabel(k)}</div></div>
+    ${who}
+    ${reg ? `<div class="stack"><b>${t("firstTime")}</b>
+      <div><label class="lbl" for="p-emp">${t("empNo")}</label><input id="p-emp" type="text" placeholder="${t("empNoPh")}" maxlength="20"></div>
+      <div><label class="lbl" for="p-name">${t("name")}</label><input id="p-name" type="text" placeholder="${t("namePh")}" maxlength="40" value="${esc(S.prof?.name || "")}"></div>
+      <div><label class="lbl" for="p-dept">${t("dept")}</label><input id="p-dept" type="text" placeholder="${t("deptPh")}" maxlength="40"></div>
+      <button class="btn primary bigbtn" id="l-reg">${t("register")}</button></div>`
+    : S.isOwner ? `<button class="btn primary bigbtn" id="l-boss">${t("enterBoss")}</button><button class="btn" id="l-staff">${t("enterAsStaff")}</button>`
+    : `<button class="btn primary bigbtn" id="l-staff">${t("enter")}</button>`}
+    <p class="muted small" style="margin:0;text-align:center">${t("loginHint")}</p>
+  </div></div>`;
+}
+function render(force){
+  $("#tabs").hidden = !(S.entered && S.isOwner);
+  $("#logout").hidden = !S.entered;
+  $("#tab-boss").setAttribute("aria-selected", S.view === "boss");
+  $("#tab-me").setAttribute("aria-selected", S.view === "me");
+  const a = document.activeElement;
+  if (!force && a && app.contains(a) && (a.tagName === "TEXTAREA" || (a.tagName === "INPUT" && ["text","time","number"].includes(a.type)))) { pending = true; return; }
+  app.innerHTML = !S.entered ? loginHTML() : S.view === "boss" ? bossHTML() : meHTML();
+  bind();
+}
+document.addEventListener("focusout", () => setTimeout(() => { if (pending && !app.contains(document.activeElement)) { pending = false; render(); } }, 0));
+
+function flagsHTML(c, d){
+  if (!c) return "";
+  const f = [];
+  if (c.late) f.push(`<span class="pill warn">${t("late")}</span>`);
+  if (c.early) f.push(`<span class="pill warn">${t("early")}</span>`);
+  if (c.shortBrk) f.push(`<span class="pill bad">${t("noBrk")}</span>`);
+  if (d?.corrected) f.push(`<span class="pill neutral">${t("corrected")}</span>`);
+  return f.length ? `<span class="flags">${f.join("")}</span>` : "";
+}
+function holLabel(k){ return HOLIDAYS[k] ? `<span class="hol">${esc(HOLIDAYS[k])}</span>` : ""; }
+function dateCell(k){ const off = kindOf(k) !== "work"; return `<span class="${off ? "date-hol" : ""}">${shortDate(k)}</span>${HOLIDAYS[k] ? `<div class="small date-hol">${esc(HOLIDAYS[k])}</div>` : ""}`; }
+
+function meHTML(){
+  if (!S.me) return `
+    <div class="panel stack" style="max-width:460px">
+      <h2>${t("regTitle")}</h2>
+      <p class="muted" style="margin:0">${t("regHint")}</p>
+      <div><label class="lbl" for="p-name">${t("name")}</label><input id="p-name" type="text" placeholder="${t("namePh")}" maxlength="40"></div>
+      <div><label class="lbl" for="p-dept">${t("dept")}</label><input id="p-dept" type="text" placeholder="${t("deptPh")}" maxlength="40"></div>
+      <button class="btn primary" id="p-save">${t("register")}</button>
+    </div>`;
+  const s = cfg(), k = dayKey(), d = S.myDays[k] || {};
+  const onBrk = (d.breaks || []).some(b => !b.e);
+  const st = d.outAt ? "out" : d.inAt ? (onBrk ? "brk" : "in") : "none";
+  const c = calc(d, k);
+  const r = d.report || {};
+  const editing = S.editing || !d.reportAt;
+  const brkTotal = d.inAt ? breakMs(d) : { ms:0, recorded:false };
+  const lastBrk = (d.breaks || []).slice(-1)[0];
+  // period summary
+  const [ps, pe] = periodOf(periodForDay(k));
+  let pd = 0, pot = 0;
+  Object.values(S.myDays).forEach(x => { if (x.date >= ps && x.date <= pe && x.inAt) { pd++; const cc = calc(x, x.date); if (cc && !cc.open) pot += cc.ot; } });
+  const reqs = Object.entries(S.me.requests || {}).sort((a,b) => b[1].createdAt - a[1].createdAt).slice(0,6);
+  const histKeys = [];
+  for (let i = 1; i <= 31; i++) histKeys.push(addDays(k, -i));
+  const since = S.me.joinedAt ? dayKey(S.me.joinedAt) : k;
+  const hist = histKeys.filter(x => S.myDays[x] || (kindOf(x) === "work" && x >= since));
+  return `
+  <div class="grid2">
+    <section class="panel stack">
+      <div>
+        <div class="clock" id="clock">${hms(Date.now())}</div>
+        <div class="clock-date">${longDate(k)} ${holLabel(k)} · ${esc(S.me.name)}${S.me.dept ? " · " + esc(S.me.dept) : ""}</div>
+        <div class="small muted">${t("schedule")} <span class="mono">${s.start}–${s.end}</span></div>
+      </div>
+      <div class="punches">
+        <div class="punch"><span class="k">${t("in")}</span><span class="v">${hm(d.inAt)}</span>${d.inAt ? `<span class="stamp">${t("sIn")}</span>` : ""}</div>
+        <div class="punch"><span class="k">${t("brk")}</span><span class="v">${brkTotal.recorded ? fmtH(brkTotal.ms / H) : "—"}</span>${st === "brk" ? `<span class="small muted">${t("onBreak")} ${hm(lastBrk.s)}〜</span>` : ""}</div>
+        <div class="punch"><span class="k">${t("out")}</span><span class="v">${hm(d.outAt)}</span>${d.outAt ? `<span class="stamp">${t("sOut")}</span>` : ""}</div>
+      </div>
+      ${st === "none" ? `<button class="btn primary bigbtn" id="punch-in">${t("punchIn")}</button>` :
+        st === "in" ? `<div class="btnrow"><button class="btn bigbtn" id="brk-s">${t("brkStart")}</button><button class="btn primary bigbtn" id="punch-out">${t("punchOut")}</button></div>` :
+        st === "brk" ? `<button class="btn primary bigbtn" id="brk-e">${t("brkEnd")}</button>` :
+        `<div class="row"><span class="pill ok">${t("done")}</span><span class="muted">${t("net")} <span class="mono">${fmtH(c.net)}</span>${c.ot > 0 ? ` · ${t("ot")} <span class="mono">${fmtH(c.ot)}</span>` : ""}${c.night > 0 ? ` · ${t("night")} <span class="mono">${fmtH(c.night)}</span>` : ""}</span></div>`}
+      ${flagsHTML(c, d)}
+      ${(st === "in" || st === "brk") && !d.reportAt ? `<p class="muted" style="margin:0;font-size:13px">${t("reportReminder")}</p>` : ""}
+      <div class="row small muted" style="justify-content:space-between"><span>${t("monthMine")} ${shortDate(ps)}〜${shortDate(pe)} · ${t("days")} <span class="mono">${pd}</span> · ${t("ot")} <span class="mono">${fmtH(pot)}</span></span><button class="btn sm" data-fix="${k}">${t("fixReq")}</button></div>
+    </section>
+    <section class="panel">
+      <h2>${t("repTitle")} ${d.reportAt ? `<span class="sub">${t("submittedAt")} ${hm(d.reportAt)}${d.reviewedAt ? " · " + t("reviewed") : ""}</span>` : `<span class="sub">${t("notSubmitted")}</span>`}</h2>
+      ${editing ? `
+      <form id="rep" class="stack">
+        <div><label class="lbl" for="r-done">${t("rDone")}</label><textarea id="r-done" required placeholder="${t("rDonePh")}">${esc(r.done)}</textarea></div>
+        <div><label class="lbl" for="r-plan">${t("rPlan")}</label><textarea id="r-plan" placeholder="${t("rPlanPh")}">${esc(r.plan)}</textarea></div>
+        <div class="fields">
+          <div><label class="lbl" for="r-issue">${t("rIssue")}</label><textarea id="r-issue" placeholder="${t("rOptPh")}">${esc(r.issues)}</textarea></div>
+          <div><label class="lbl" for="r-consult">${t("rConsult")}</label><textarea id="r-consult" placeholder="${t("rOptPh")}">${esc(r.consult)}</textarea></div>
+        </div>
+        <div class="row"><button class="btn primary" type="submit">${d.reportAt ? t("saveEdit") : t("submit")}</button>${d.reportAt ? `<button class="btn" type="button" id="r-cancel">${t("cancel")}</button>` : ""}</div>
+      </form>` : `
+      <div class="report">
+        ${repDL(r)}
+        ${d.bossComment ? `<div class="comment"><b>${t("bossReply")}：</b>${esc(d.bossComment)}</div>` : ""}
+        <div><button class="btn" id="r-edit">${t("editRep")}</button></div>
+      </div>`}
+    </section>
+  </div>
+  ${myTasksHTML()}
+  ${reqs.length ? `<section class="panel"><h2>${t("myReqs")}</h2><div class="tbl-wrap"><table><thead><tr><th>${t("date")}</th><th>${t("requested")}</th><th>${t("reason")}</th><th>${t("status")}</th></tr></thead><tbody>
+    ${reqs.map(([,q]) => `<tr><td>${shortDate(q.date)}</td><td class="num">${q.inTime || "—"} – ${q.outTime || "—"}${q.breakMin != null ? ` / ${q.breakMin}′` : ""}</td><td>${esc(q.reason)}${q.bossNote ? `<div class="small muted">${t("bossReply")}：${esc(q.bossNote)}</div>` : ""}</td><td>${reqPill(q.status)}</td></tr>`).join("")}
+  </tbody></table></div></section>` : ""}
+  <section class="panel">
+    <h2>${t("recent")} <span class="sub">${t("recentSub")}</span></h2>
+    ${hist.length ? `<div class="tbl-wrap"><table><thead><tr><th>${t("date")}</th><th>${t("in")}</th><th>${t("out")}</th><th>${t("net")}</th><th>${t("ot")}</th><th></th><th>${t("report")}</th><th></th></tr></thead><tbody>
+      ${hist.map(x => { const dd = S.myDays[x], cc = calc(dd, x); return `<tr><td>${dateCell(x)}</td><td class="num">${hm(dd?.inAt)}</td><td class="num">${hm(dd?.outAt)}</td><td class="num">${fmtH(cc?.net)}</td><td class="num">${cc?.ot ? fmtH(cc.ot) : "—"}</td><td>${flagsHTML(cc, dd)}</td><td>${dd?.reportAt ? `<span class="pill ok">${t("handed")}</span>` : dd?.inAt ? `<span class="pill bad">${t("missing")}</span>` : ""}${dd?.bossComment ? `<div class="small muted">${esc(dd.bossComment)}</div>` : ""}</td><td><button class="btn sm" data-fix="${x}">${t("fix")}</button></td></tr>`; }).join("")}
+    </tbody></table></div>` : `<div class="empty">${t("recentEmpty")}</div>`}
+  </section>`;
+}
+function tasksOf(p){ return Object.entries(p?.tasks || {}).filter(([,x]) => !x.withdrawn).map(([tid, x]) => ({ tid, ...x })); }
+const prioRank = { urgent:0, high:1, normal:2 };
+function sortTasks(a, b){ return (a.status === "done") - (b.status === "done") || (prioRank[a.priority] ?? 2) - (prioRank[b.priority] ?? 2) || (a.due || "9999").localeCompare(b.due || "9999"); }
+const isOverdue = x => x.status !== "done" && x.due && x.due < dayKey();
+function prioPill(pr){ return pr === "urgent" ? `<span class="pill bad">${t("pUrgent")}</span>` : pr === "high" ? `<span class="pill warn">${t("pHigh")}</span>` : ""; }
+function stPill(st){ return st === "done" ? `<span class="pill ok">${t("stDone")}</span>` : st === "doing" ? `<span class="pill warn">${t("stDoing")}</span>` : `<span class="pill neutral">${t("stTodo")}</span>`; }
+function taskMeta(x){ return `<span class="small muted">${x.due ? `${t("dueOn")} ${shortDate(x.due)}` : ""}${x.status === "done" && x.doneAt ? ` · ${t("doneOn")} ${shortDate(dayKey(x.doneAt))}` : ""}</span>${isOverdue(x) ? ` <span class="pill bad">${t("overdue")}</span>` : ""}`; }
+function myTasksHTML(){
+  const list = tasksOf(S.me).sort(sortTasks);
+  const open = list.filter(x => x.status !== "done"), done = list.filter(x => x.status === "done").sort((a,b) => (b.doneAt||0) - (a.doneAt||0)).slice(0,5);
+  const card = x => `<div class="task ${x.priority === "urgent" && x.status !== "done" ? "urgent" : ""}">
+    <div class="tt"><b>${esc(x.title)}</b><span class="flags">${prioPill(x.priority)}${stPill(x.status)}</span></div>
+    ${x.detail ? `<div class="det">${esc(x.detail)}</div>` : ""}
+    <div>${taskMeta(x)}</div>
+    <div class="row"><span class="seg">${["todo","doing","done"].map(st => `<button type="button" data-tst="${x.tid}|${st}" aria-pressed="${x.status === st}">${t(st === "todo" ? "stTodo" : st === "doing" ? "stDoing" : "stDone")}</button>`).join("")}</span></div>
+    <div class="row"><input type="text" id="tp-${x.tid}" placeholder="${t("progressPh")}" value="${esc(x.progress || "")}" style="flex:1;min-width:160px"><button class="btn sm" data-tprog="${x.tid}">${t("saveProg")}</button></div>
+  </div>`;
+  return `<section class="panel stack"><h2>${t("myTasks")} <span class="sub">${t("openN")} ${open.length}</span></h2>
+    ${open.length ? `<div class="task-grid">${open.map(card).join("")}</div>` : `<div class="empty" style="padding:12px">${t("noTasks")}</div>`}
+    ${done.length ? `<b class="small muted">${t("doneTasks")}</b><div class="task-grid">${done.map(card).join("")}</div>` : ""}
+  </section>`;
+}
+function bossTasksHTML(ids){
+  const all = [];
+  ids.forEach(id => tasksOf(S.staff[id]).forEach(x => all.push({ id, ...x })));
+  const open = all.filter(x => x.status !== "done").sort(sortTasks);
+  const done = all.filter(x => x.status === "done").sort((a,b) => (b.doneAt||0) - (a.doneAt||0)).slice(0,20);
+  const row = x => { const p = S.staff[x.id]; return `<tr><td><b>${esc(x.title)}</b>${x.detail ? `<div class="small muted" style="white-space:pre-wrap">${esc(x.detail)}</div>` : ""}</td><td>${esc(p.name)}</td><td><span class="flags">${prioPill(x.priority)}${stPill(x.status)}</span></td><td>${taskMeta(x)}</td><td style="min-width:160px">${x.progress ? esc(x.progress) : `<span class="muted">—</span>`}${x.updatedAt && x.updatedAt !== x.createdAt ? `<div class="small muted mono">${shortDate(dayKey(x.updatedAt))} ${hm(x.updatedAt)}</div>` : ""}</td><td>${x.status !== "done" ? `<button class="btn sm danger" data-twd="${x.id}|${x.tid}">${t("withdraw")}</button>` : ""}</td></tr>`; };
+  const head = `<thead><tr><th>${t("taskTitle")}</th><th>${t("assignee")}</th><th>${t("status")}</th><th>${t("due")}</th><th>${t("progress")}</th><th></th></tr></thead>`;
+  const opts = ids.map(id => `<option value="${id}">${esc(S.staff[id].name)}</option>`).join("");
+  return `<section class="panel" style="margin-top:16px"><h2>${t("newTask")}</h2>
+    <form id="taskform" class="stack">
+      <div><label class="lbl" for="tk-title">${t("taskTitle")}</label><input id="tk-title" type="text" maxlength="120" placeholder="${t("taskTitlePh")}"></div>
+      <div><label class="lbl" for="tk-detail">${t("taskDetail")}</label><textarea id="tk-detail" style="min-height:56px"></textarea></div>
+      <div class="fields">
+        <div><label class="lbl" for="tk-who">${t("assignee")}</label><select id="tk-who"><option value="*">${t("allStaff")}</option>${opts}</select></div>
+        <div><label class="lbl" for="tk-due">${t("due")}</label><input id="tk-due" type="date" min="${dayKey()}"></div>
+        <div><label class="lbl" for="tk-prio">${t("prio")}</label><select id="tk-prio"><option value="normal">${t("pNormal")}</option><option value="high">${t("pHigh")}</option><option value="urgent">${t("pUrgent")}</option></select></div>
+      </div>
+      <div><button class="btn primary" type="submit">${t("assign")}</button></div>
+    </form></section>
+  <section class="panel" style="margin-top:16px"><h2>${t("activeTasks")} <span class="sub">${t("openN")} ${open.length} · ${t("overdueN")} ${open.filter(isOverdue).length}</span></h2>
+    ${open.length ? `<div class="tbl-wrap"><table>${head}<tbody>${open.map(row).join("")}</tbody></table></div>` : `<div class="empty">${t("noTasks")}</div>`}</section>
+  ${done.length ? `<section class="panel" style="margin-top:16px"><h2>${t("doneTasks")}</h2><div class="tbl-wrap"><table>${head}<tbody>${done.map(row).join("")}</tbody></table></div></section>` : ""}`;
+}
+function repDL(r){ return `<dl><dt>${t("lDone")}</dt><dd>${esc(r.done)}</dd>${r.plan ? `<dt>${t("lPlan")}</dt><dd>${esc(r.plan)}</dd>` : ""}${r.issues ? `<dt>${t("lIssue")}</dt><dd>${esc(r.issues)}</dd>` : ""}${r.consult ? `<dt>${t("lConsult")}</dt><dd>${esc(r.consult)}</dd>` : ""}</dl>`; }
+function reqPill(st){ return st === "approved" ? `<span class="pill ok">${t("approved")}</span>` : st === "rejected" ? `<span class="pill neutral">${t("rejected")}</span>` : `<span class="pill warn">${t("pending")}</span>`; }
+
+function openFix(k){
+  const d = S.myDays[k] || {};
+  const m = $("#modal");
+  m.innerHTML = `<div class="modal-bg" id="m-bg"><form class="modal stack" id="fixform">
+    <h2 style="margin:0;font-size:16px">${t("reqTitle")} · ${longDate(k)}</h2>
+    <p class="muted small" style="margin:0">${t("reqHint")}</p>
+    <div class="small muted">${t("original")}：<span class="mono">${hm(d.inAt)} – ${hm(d.outAt)}</span></div>
+    <div class="fields">
+      <div><label class="lbl" for="f-in">${t("inTime")}</label><input id="f-in" type="time" value="${d.inAt ? hm(d.inAt) : ""}"></div>
+      <div><label class="lbl" for="f-out">${t("outTime")}</label><input id="f-out" type="time" value="${d.outAt ? hm(d.outAt) : ""}"></div>
+      <div><label class="lbl" for="f-brk">${t("brkMin")}</label><input id="f-brk" type="number" min="0" max="600" step="5" value="${breakMs(d).recorded ? Math.round(breakMs(d).ms / 6e4) : ""}"></div>
+    </div>
+    <div><label class="lbl" for="f-reason">${t("reason")}</label><textarea id="f-reason" placeholder="${t("reasonPh")}"></textarea></div>
+    <div class="row"><button class="btn primary" type="submit">${t("send")}</button><button class="btn" type="button" id="f-cancel">${t("cancel")}</button></div>
+  </form></div>`;
+  m.hidden = false;
+  const close = () => { m.hidden = true; m.innerHTML = ""; if (pending) { pending = false; render(); } };
+  $("#f-cancel").onclick = close;
+  $("#m-bg").addEventListener("click", e => { if (e.target.id === "m-bg") close(); });
+  $("#fixform").addEventListener("submit", async e => {
+    e.preventDefault();
+    const inTime = $("#f-in").value, outTime = $("#f-out").value, b = $("#f-brk").value, reason = $("#f-reason").value.trim();
+    if (!inTime && !outTime) { toast(t("needTimes")); return; }
+    if (!reason) { toast(t("needReason")); return; }
+    const req = { date:k, inTime:inTime || null, outTime:outTime || null, reason };
+    if (b !== "") req.breakMin = Math.max(0, Math.min(600, Number(b)));
+    if (await sendRequest(req)) { toast(t("reqSent")); close(); }
+  });
+  $("#f-in").focus();
+}
+
+/* ---------- boss ---------- */
+function allPending(){
+  const out = [];
+  Object.entries(S.staff).forEach(([id, p]) => Object.entries(p.requests || {}).forEach(([rid, r]) => out.push({ id, rid, r })));
+  return out;
+}
+function bossHTML(){
+  const ids = Object.keys(S.staff).sort((a,b) => (S.staff[a].name||"").localeCompare(S.staff[b].name||"", lang));
+  const pendN = allPending().filter(x => x.r.status === "pending").length;
+  const overN = ids.reduce((a, id) => a + tasksOf(S.staff[id]).filter(isOverdue).length, 0);
+  const tb = (key, label, extra = "") => `<button data-btab="${key}" aria-selected="${S.bossTab === key}">${label}${extra}</button>`;
+  const ctrl = S.bossTab === "month" ? `<input id="b-month" type="month" value="${S.bossMonth}" style="width:auto">` : S.bossTab === "day" ? `<input id="b-date" type="date" value="${S.bossDate}" max="${dayKey()}" style="width:auto">` : "";
+  const head = `<div class="row" style="justify-content:space-between">
+      <div class="tabs">${tb("day", t("tDay"))}${tb("feed", t("tFeed"))}${tb("month", t("tMonth"))}${tb("task", t("tTask"), overN ? `<span class="badge">${overN}</span>` : "")}${tb("req", t("tReq"), pendN ? `<span class="badge">${pendN}</span>` : "")}${tb("set", t("tSet"))}</div>${ctrl}</div>`;
+  if (S.bossTab === "set") return head + settingsHTML();
+  if (!ids.length) return head + `<div class="panel empty" style="margin-top:16px">${t("noStaff")}</div>`;
+  if (S.bossTab === "feed") return head + feedHTML(ids);
+  if (S.bossTab === "month") return head + monthHTML(ids);
+  if (S.bossTab === "req") return head + reqHTML();
+  if (S.bossTab === "task") return head + bossTasksHTML(ids);
+  const k = S.bossDate, isToday = k === dayKey(), kind = kindOf(k);
+  let inN=0,outN=0,noneN=0,repN=0,lateN=0;
+  ids.forEach(id => { const d = (S.days[id]||{})[k], c = calc(d, k); if (d?.inAt) inN++; else noneN++; if (d?.outAt) outN++; if (d?.reportAt) repN++; if (c?.late) lateN++; });
+  return head + `
+  <div class="kpis" style="margin-top:16px">
+    <div class="kpi"><div class="n">${ids.length}</div><div class="t">${t("staff")}</div></div>
+    <div class="kpi"><div class="n">${inN}</div><div class="t">${t("inN")}</div></div>
+    <div class="kpi"><div class="n">${outN}</div><div class="t">${t("outN")}</div></div>
+    <div class="kpi ${noneN && kind === "work" ? "alert" : ""}"><div class="n">${noneN}</div><div class="t">${t("noneN")}</div></div>
+    <div class="kpi ${lateN ? "alert" : ""}"><div class="n">${lateN}</div><div class="t">${t("lateN")}</div></div>
+    <div class="kpi"><div class="n">${repN}/${inN}</div><div class="t">${t("repN")}</div></div>
+  </div>
+  <section class="panel" style="margin-top:16px">
+    <h2><span>${longDate(k)}${isToday ? " · " + t("today") : ""} ${kind !== "work" ? `<span class="pill neutral">${HOLIDAYS[k] ? esc(HOLIDAYS[k]) : t("offDay")}</span>` : ""}</span> <span class="sub">${t("clickRow")}</span></h2>
+    <div class="tbl-wrap"><table><thead><tr><th>${t("staff")}</th><th>${t("status")}</th><th>${t("in")}</th><th>${t("out")}</th><th>${t("brk")}</th><th>${t("net")}</th><th>${t("ot")}</th><th>${t("night")}</th><th></th><th>${t("report")}</th></tr></thead><tbody>
+    ${ids.map(id => { const p = S.staff[id], d = (S.days[id]||{})[k], c = calc(d, k); const open = S.openRow === id; const onBrk = (d?.breaks||[]).some(b => !b.e);
+      const stp = !d?.inAt ? (kind === "work" ? `<span class="pill bad">${t("noPunch")}</span>` : `<span class="pill neutral">${t("offDay")}</span>`) : !d.outAt ? `<span class="pill warn">${onBrk ? t("onBreak") : t("working")}</span>` : `<span class="pill ok">${t("left")}</span>`;
+      return `<tr class="clickable" data-row="${id}"><td><b>${esc(p.name)}</b><div class="muted small">${p.empNo ? `<span class="mono">${esc(p.empNo)}</span> · ` : ""}${esc(p.dept||"")}</div>${(() => { const o = tasksOf(p).filter(x => x.status !== "done"); return o.length ? `<div class="small muted">${t("tTask")} ${o.length}${o.some(isOverdue) ? ` · <span style="color:var(--bad)">${t("overdue")}</span>` : ""}</div>` : ""; })()}</td>
+        <td>${stp}</td><td class="num">${hm(d?.inAt)}</td><td class="num">${hm(d?.outAt)}</td><td class="num">${d?.inAt && breakMs(d).recorded ? fmtH(breakMs(d).ms / H) : "—"}</td><td class="num">${fmtH(c?.net)}</td><td class="num">${c?.ot ? fmtH(c.ot) : "—"}</td><td class="num">${c?.night ? fmtH(c.night) : "—"}</td><td>${flagsHTML(c, d)}</td>
+        <td>${d?.reportAt ? `<span class="pill ${d.reviewedAt ? "neutral" : "ok"}">${d.reviewedAt ? t("read") : t("newRep")}</span>` : d?.inAt ? `<span class="pill bad">${t("missing")}</span>` : ""}</td></tr>
+        ${open ? `<tr><td colspan="10">${reportBlock(id, k, d, true)}</td></tr>` : ""}`; }).join("")}
+    </tbody></table></div>
+  </section>`;
+}
+function reportBlock(id, k, d, withName){
+  const p = S.staff[id] || {};
+  if (!d?.reportAt) return `<div class="muted" style="padding:6px 0">${withName ? "" : esc(p.name)+" · "}${t("noRepThatDay")}</div>`;
+  return `<div class="report">
+    ${withName ? "" : `<div class="who"><b>${esc(p.name)}</b><span class="muted mono small">${shortDate(k)} ${hm(d.reportAt)} ${t("submittedSuffix")}</span></div>`}
+    ${repDL(d.report || {})}
+    <div class="row"><input type="text" id="c-${id}-${k}" placeholder="${t("replyPh")}" value="${esc(d.bossComment||"")}" style="flex:1;min-width:160px">
+    <button class="btn ${d.reviewedAt ? "" : "primary"}" data-ack="${id}|${k}">${d.reviewedAt ? t("updReply") : t("markRead")}</button></div>
+  </div>`;
+}
+function feedHTML(ids){
+  const items = [];
+  ids.forEach(id => Object.values(S.days[id]||{}).forEach(d => d.reportAt && items.push({id, d})));
+  items.sort((a,b) => b.d.reportAt - a.d.reportAt);
+  const top = items.slice(0,40);
+  return `<section class="panel stack" style="margin-top:16px"><h2>${t("feedTitle")} <span class="sub">${t("feedSub")}</span></h2>
+    ${top.length ? top.map(x => reportBlock(x.id, x.d.date, x.d, false)).join("") : `<div class="empty">${t("feedEmpty")}</div>`}</section>`;
+}
+function monthRows(ids){
+  const [ps, pe] = periodOf(S.bossMonth), fy = fyStartKey(S.bossMonth);
+  return ids.map(id => {
+    const all = Object.values(S.days[id]||{});
+    const ds = all.filter(d => d.date >= ps && d.date <= pe).sort((a,b) => a.date.localeCompare(b.date));
+    const R = { id, p:S.staff[id], ds, work:0, net:0, ot:0, night:0, hol:0, late:0, early:0, open:0, ytd:0 };
+    ds.forEach(d => { const c = calc(d, d.date); if (!c) return; R.work++; if (c.late) R.late++; if (c.open) { if (d.date < dayKey()) R.open++; return; } if (c.early) R.early++; R.net += c.net; R.ot += c.ot; R.night += c.night; R.hol += c.hol; });
+    all.forEach(d => { if (d.date >= fy && d.date <= pe) { const c = calc(d, d.date); if (c && !c.open) R.ytd += c.ot; } });
+    return R;
+  });
+}
+function level(v, lim){ return v > lim ? "hot" : v > lim * .8 ? "warm" : ""; }
+function monthHTML(ids){
+  const s = cfg(), rows = monthRows(ids), [ps, pe] = periodOf(S.bossMonth);
+  return `<section class="panel" style="margin-top:16px"><h2><span>${t("period")} ${shortDate(ps)} 〜 ${shortDate(pe)}</span> ${S.downloads ? `<button class="btn" id="csv">${t("exportCsv")}</button>` : ""}</h2>
+    <div class="tbl-wrap"><table><thead><tr><th>${t("staff")}</th><th>${t("workDays")}</th><th>${t("lateCnt")}</th><th>${t("earlyCnt")}</th><th>${t("netH")}</th><th>${t("otH")} / ${s.otMonth}h</th><th>${t("nightH")}</th><th>${t("holH")}</th><th>${t("ytd")} / ${s.otYear}h</th><th>${t("openOut")}</th></tr></thead><tbody>
+    ${rows.map(r => { const lm = level(r.ot, s.otMonth), ly = level(r.ytd, s.otYear), combo = r.ot + r.hol; const lc = combo >= 100 ? "hot" : combo >= 80 ? "warm" : "";
+      return `<tr><td><b>${esc(r.p.name)}</b><div class="muted small">${esc(r.p.dept||"")}</div></td><td class="num">${r.work}</td><td class="num ${r.late ? "warm" : ""}">${r.late}</td><td class="num ${r.early ? "warm" : ""}">${r.early}</td><td class="num">${fmtH(r.net)}</td>
+      <td class="num ${lm || lc}">${fmtH(r.ot)}<div class="meter"><i class="${lm}" style="width:${Math.min(100, r.ot / s.otMonth * 100)}%"></i></div></td><td class="num">${fmtH(r.night)}</td><td class="num ${lc}">${fmtH(r.hol)}</td>
+      <td class="num ${ly}">${fmtH(r.ytd)}<div class="meter"><i class="${ly}" style="width:${Math.min(100, r.ytd / s.otYear * 100)}%"></i></div></td><td>${r.open ? `<span class="pill warn">${r.open}</span>` : `<span class="muted">—</span>`}</td></tr>`; }).join("")}
+    </tbody></table></div>
+    <p class="muted small" style="margin:12px 0 0">${t("m36")}</p>
+    <p class="muted small" style="margin:6px 0 0">${t("calcNote")}</p>
+  </section>`;
+}
+function reqHTML(){
+  const list = allPending().sort((a,b) => b.r.createdAt - a.r.createdAt);
+  const pend = list.filter(x => x.r.status === "pending"), done = list.filter(x => x.r.status !== "pending").slice(0,20);
+  const card = x => { const p = S.staff[x.id], d = (S.days[x.id]||{})[x.r.date] || {};
+    return `<div class="req">
+      <div class="row" style="justify-content:space-between"><b>${esc(p.name)} · ${longDate(x.r.date)}</b>${reqPill(x.r.status)}</div>
+      <div class="small"><span class="muted">${t("original")}：</span><span class="mono">${hm(d.inAt)} – ${hm(d.outAt)}</span> → <span class="muted">${t("requested")}：</span><span class="mono">${x.r.inTime || "—"} – ${x.r.outTime || "—"}${x.r.breakMin != null ? ` / ${t("brk")} ${x.r.breakMin}′` : ""}</span></div>
+      <div class="reason">${esc(x.r.reason)}</div>
+      ${x.r.status === "pending" ? `<div class="row"><input type="text" id="rn-${x.rid}" placeholder="${t("reqNotePh")}" style="flex:1;min-width:150px"><button class="btn primary" data-dec="${x.id}|${x.rid}|1">${t("approve")}</button><button class="btn danger" data-dec="${x.id}|${x.rid}|0">${t("reject")}</button></div>` : x.r.bossNote ? `<div class="comment">${esc(x.r.bossNote)}</div>` : ""}
+    </div>`; };
+  return `<section class="panel stack" style="margin-top:16px"><h2>${t("reqTitle")}</h2>${pend.length ? pend.map(card).join("") : `<div class="empty">${t("reqEmpty")}</div>`}</section>
+    ${done.length ? `<section class="panel stack" style="margin-top:16px"><h2>${t("history")}</h2>${done.map(card).join("")}</section>` : ""}`;
+}
+function settingsHTML(){
+  const s = cfg();
+  const opt = (v, cur, label) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${label}</option>`;
+  const lid = S.logoDraft !== undefined ? S.logoDraft : (s.logoId || null);
+  return `<section class="panel stack" style="margin-top:16px;max-width:640px"><h2>${t("tSet")}</h2>
+    <form id="setform" class="stack">
+      <b class="small muted">${t("setCo")}</b>
+      <div class="fields">
+        <div><label class="lbl" for="s-co">${t("coName")}</label><input id="s-co" type="text" maxlength="60" value="${esc(s.companyName || "")}"></div>
+        <div><label class="lbl" for="s-coja">${t("coNameJa")}</label><input id="s-coja" type="text" maxlength="60" value="${esc(s.companyNameJa || "")}"></div>
+      </div>
+      <div><span class="lbl">${t("logo")}</span><div class="logo-prev">${lid && !S.demo ? `<img src="${logoUrl(lid)}" alt="">` : ""}
+        ${S.assets ? `<label class="btn sm" for="s-logo">${t("upLogo")}</label><input id="s-logo" type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden>` : `<span class="muted small">${t("logoNoPerm")}</span>`}
+        ${lid ? `<button class="btn sm danger" type="button" id="s-rmlogo">${t("rmLogo")}</button>` : ""}</div></div>
+      <b class="small muted">${t("setTitle")}</b>
+      <div class="fields">
+        <div><label class="lbl" for="s-start">${t("setStart")}</label><input id="s-start" type="time" value="${s.start}" required></div>
+        <div><label class="lbl" for="s-end">${t("setEnd")}</label><input id="s-end" type="time" value="${s.end}" required></div>
+        <div><label class="lbl" for="s-close">${t("setClose")}</label><select id="s-close">${opt(0, s.closing, t("closeEnd"))}${[5,10,15,20,25].map(n => opt(n, s.closing, t("closeN", n))).join("")}</select></div>
+        <div><label class="lbl" for="s-legal">${t("setLegal")}</label><select id="s-legal">${opt(0, s.legalDow, t("sun"))}${opt(6, s.legalDow, t("sat"))}</select></div>
+        <div><label class="lbl" for="s-fy">${t("setFy")}</label><select id="s-fy">${[1,4,10].map(n => opt(n, s.fyStart, t("monthN", n))).join("")}</select></div>
+        <div><label class="lbl" for="s-otm">${t("setOtM")}</label><input id="s-otm" type="number" min="1" max="100" value="${s.otMonth}"></div>
+        <div><label class="lbl" for="s-oty">${t("setOtY")}</label><input id="s-oty" type="number" min="1" max="720" value="${s.otYear}"></div>
+      </div>
+      <p class="muted small" style="margin:0">${t("holidaysNote")}</p>
+      <div><button class="btn primary" type="submit">${t("saveSet")}</button></div>
+    </form></section>`;
+}
+
+/* ---------- events ---------- */
+function bind(){
+  const on = (sel, ev, fn) => { const el = $(sel); if (el) el.addEventListener(ev, fn); };
+  on("#l-reg","click", async () => { const n = $("#p-name").value.trim(), dp = $("#p-dept").value.trim(), en = $("#p-emp").value.trim(); if (!n) { toast(t("needName")); return; } if (await saveProfile(n, dp, en)) { S.entered = true; S.view = "me"; render(true); } });
+  on("#l-boss","click", () => { S.entered = true; S.view = "boss"; render(true); });
+  on("#l-staff","click", () => { S.entered = true; S.view = "me"; render(true); });
+  on("#s-logo","change", async e => { const f = e.target.files?.[0]; if (!f) return;
+    try { const r = await S.assets.upload(f); S.logoDraft = r.id; toast(t("logoOk")); render(true); } catch { toast(t("logoFail")); } });
+  on("#s-rmlogo","click", () => { S.logoDraft = null; render(true); });
+  on("#taskform","submit", async e => { e.preventDefault(); const title = $("#tk-title").value.trim(); if (!title) { toast(t("needTitle")); return; }
+    const who = $("#tk-who").value, ids = who === "*" ? Object.keys(S.staff) : [who];
+    const task = { title, detail:$("#tk-detail").value.trim(), due:$("#tk-due").value || null, priority:$("#tk-prio").value };
+    document.activeElement?.blur(); pending = false; await assignTask(ids, task); });
+  app.querySelectorAll("[data-tst]").forEach(b => b.addEventListener("click", () => { const [tid, st] = b.dataset.tst.split("|"); patchTask(S.uid, tid, { status:st, doneAt: st === "done" ? Date.now() : null }, t("progSaved")); }));
+  app.querySelectorAll("[data-tprog]").forEach(b => b.addEventListener("click", () => { const tid = b.dataset.tprog, inp = document.getElementById("tp-" + tid); const v = inp.value.trim(); inp.blur(); pending = false; const cur = (S.me.tasks || {})[tid] || {}; patchTask(S.uid, tid, { progress:v, status: cur.status === "todo" && v ? "doing" : cur.status }, t("progSaved")); }));
+  app.querySelectorAll("[data-twd]").forEach(b => b.addEventListener("click", () => { const [id, tid] = b.dataset.twd.split("|"); b.disabled = true; patchTask(id, tid, { withdrawn:true }, t("withdrawn")); }));
+  on("#p-save","click", () => { const n = $("#p-name").value.trim(), dp = $("#p-dept").value.trim(); if (!n) { toast(t("needName")); return; } saveProfile(n, dp, S.me?.empNo || ""); });
+  on("#punch-in","click", async e => { e.target.disabled = true; if (await saveMyDay({ inAt:Date.now() })) toast(t("okIn") + " " + hm(Date.now())); else e.target.disabled = false; });
+  on("#punch-out","click", async e => { e.target.disabled = true; if (await saveMyDay({ outAt:Date.now() })) toast(t("okOut")); else e.target.disabled = false; });
+  on("#brk-s","click", async e => { e.target.disabled = true; const d = S.myDays[dayKey()] || {}; if (await saveMyDay({ breaks:[ ...(d.breaks||[]), { s:Date.now() } ] })) toast(t("okBrkS")); else e.target.disabled = false; });
+  on("#brk-e","click", async e => { e.target.disabled = true; const d = S.myDays[dayKey()] || {}; const b = (d.breaks||[]).map(x => x.e ? x : { ...x, e:Date.now() }); if (await saveMyDay({ breaks:b })) toast(t("okBrkE")); else e.target.disabled = false; });
+  on("#rep","submit", async e => { e.preventDefault(); const done = $("#r-done").value.trim(); if (!done) { toast(t("needDone")); return; }
+    const report = { done, plan:$("#r-plan").value.trim(), issues:$("#r-issue").value.trim(), consult:$("#r-consult").value.trim() };
+    document.activeElement?.blur(); pending = false; S.editing = false;
+    if (await saveMyDay({ report, reportAt:Date.now() })) toast(t("repOk")); render(true); });
+  on("#r-edit","click", () => { S.editing = true; render(true); });
+  on("#r-cancel","click", () => { S.editing = false; render(true); });
+  app.querySelectorAll("[data-fix]").forEach(b => b.addEventListener("click", () => openFix(b.dataset.fix)));
+  app.querySelectorAll("[data-btab]").forEach(b => b.addEventListener("click", () => { S.bossTab = b.dataset.btab; render(true); }));
+  on("#b-date","change", e => { if (e.target.value) { S.bossDate = e.target.value; S.openRow = null; render(true); } });
+  on("#b-month","change", e => { if (e.target.value) { S.bossMonth = e.target.value; render(true); } });
+  on("#csv","click", exportCSV);
+  on("#setform","submit", e => { e.preventDefault(); document.activeElement?.blur(); pending = false;
+    const lid = S.logoDraft !== undefined ? S.logoDraft : (S.settings?.logoId || null); S.logoDraft = undefined;
+    saveSettings({ companyName:$("#s-co").value.trim(), companyNameJa:$("#s-coja").value.trim(), logoId:lid, start:$("#s-start").value || DEF.start, end:$("#s-end").value || DEF.end, closing:Number($("#s-close").value), legalDow:Number($("#s-legal").value), fyStart:Number($("#s-fy").value), otMonth:Number($("#s-otm").value) || DEF.otMonth, otYear:Number($("#s-oty").value) || DEF.otYear }); });
+  app.querySelectorAll("tr[data-row]").forEach(tr => tr.addEventListener("click", () => { S.openRow = S.openRow === tr.dataset.row ? null : tr.dataset.row; render(true); }));
+  app.querySelectorAll("[data-ack]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); const [id,k] = b.dataset.ack.split("|"); const inp = document.getElementById(`c-${id}-${k}`); const v = inp ? inp.value.trim() : ""; inp?.blur(); pending = false; saveComment(id, k, v); }));
+  app.querySelectorAll("[data-dec]").forEach(b => b.addEventListener("click", () => { const [id,rid,ok] = b.dataset.dec.split("|"); const inp = document.getElementById(`rn-${rid}`); const note = inp ? inp.value.trim() : ""; inp?.blur(); pending = false; b.disabled = true; decideRequest(id, rid, ok === "1", note); }));
+}
+$("#tab-boss").addEventListener("click", () => { S.view = "boss"; render(true); });
+$("#tab-me").addEventListener("click", () => { S.view = "me"; render(true); });
+$("#logout").addEventListener("click", () => { S.entered = false; S.editing = false; render(true); });
+$("#lang").addEventListener("click", () => { lang = lang === "ja" ? "zh" : "ja"; try { localStorage.setItem("tc-lang", lang); } catch {} applyLang(); if (S.demo) notice(t("demo")); render(true); });
+setInterval(() => { const c = document.getElementById("clock"); if (c) c.textContent = hms(Date.now()); }, 1000);
+
+async function exportCSV(){
+  const q = v => `"${String(v ?? "").replace(/"/g,'""')}"`;
+  const kinds = { work:t("kindWork"), off:t("kindOff"), legal:t("kindLegal") };
+  const lines = [t("csvHead").map(q).join(",")];
+  monthRows(Object.keys(S.staff)).forEach(r => r.ds.forEach(d => { const c = calc(d, d.date), rp = d.report || {}, b = breakMs(d);
+    lines.push([r.p.name, r.p.dept, d.date, kinds[kindOf(d.date)], d.inAt ? hm(d.inAt) : "", d.outAt ? hm(d.outAt) : "", b.recorded ? Math.round(b.ms / 6e4) : "", fmtH(c?.net), fmtH(c?.ot), fmtH(c?.night), fmtH(c?.hol), c?.late ? "1" : "", c?.early ? "1" : "", rp.done, rp.plan, rp.issues, rp.consult, d.bossComment].map(q).join(",")); }));
+  try { await S.downloads.save({ filename:`kintai_${S.bossMonth}.csv`, data:"﻿" + lines.join("\r\n") }); } catch { toast(t("notExported")); }
+}
+
+/* ---------- demo (only when the page is not connected to its data) ---------- */
+function startDemo(){
+  S.demo = true; S.isOwner = true; S.view = "boss"; S.uid = "demo-me";
+  S.settings = { companyName:"（例）株式会社サンプル" }; applyBrand();
+  notice(t("demo"));
+  const k = dayKey();
+  const mk = (dk, inS, outS, rep, more = {}) => ({ date:dk, inAt: inS ? at(dk, inS) : undefined, outAt: outS ? at(dk, outS) : undefined,
+    breaks: inS && outS ? [{ s:at(dk,"12:00"), e:at(dk,"13:00") }] : undefined,
+    report: rep ? { done:rep, plan:more.plan || "", issues:more.issues || "", consult:more.consult || "" } : undefined, reportAt: rep ? at(dk, outS || "17:50") - 6e5 : undefined, ...(more.x || {}) });
+  const y1 = addDays(k, -1);
+  S.staff = {
+    a:{ name:"（例）佐藤 健", dept:"東京倉庫", requests:{ r1:{ date:y1, inTime:"09:00", outTime:"19:30", reason:"退勤打刻を忘れました", status:"pending", createdAt:Date.now() - 36e5 } } },
+    b:{ name:"（例）王 小明", dept:"大阪店舗", tasks:{ t1:{ title:"週末セールのPOPを作成", detail:"A4サイズ3枚、金曜までに店頭へ", due:addDays(k, 1), priority:"high", status:"doing", progress:"2枚完成", createdAt:Date.now() - 864e5, updatedAt:Date.now() - 36e5 } } },
+    c:{ name:"（例）李 娜", dept:"カスタマーサポート" }
+  };
+  S.days = {
+    a:{ [k]: { date:k, inAt:at(k,"09:12") }, [y1]: { date:y1, inAt:at(y1,"08:58"), report:{ done:"出荷4件、A区画棚卸し", plan:"返品対応" }, reportAt:at(y1,"19:20") } },
+    b:{ [k]: mk(k, "08:55", "18:20", "来店客23名対応、新商品の陳列", { issues:"レジのレシート詰まり", consult:"週末のシフト追加" }), [y1]: mk(y1, "08:50", "21:40", "新商品入荷・検品", { x:{ reviewedAt:Date.now(), bossComment:"お疲れさまでした" } }) },
+    c:{ [y1]: mk(y1, "10:00", "19:00", "問い合わせ31件対応") }
+  };
+  S.me = { name:"（例）あなた", dept:"", tasks:{ t2:{ title:"月末までにA区画の棚卸し", due:addDays(k, 5), priority:"normal", status:"todo", progress:"", createdAt:Date.now(), updatedAt:Date.now() }, t3:{ title:"安全衛生チェックリストの提出", due:addDays(k, -1), priority:"urgent", status:"todo", progress:"", createdAt:Date.now() - 3*864e5, updatedAt:Date.now() - 3*864e5 } } };
+  render(true);
+}
+
+boot().catch(() => startDemo());
+})();
+</script>
